@@ -12,10 +12,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
 const api_response_1 = require("./common/dto/api-response");
-const auth_module_1 = require("./modules/auth/auth.module");
 const dashboard_module_1 = require("./modules/dashboard/dashboard.module");
 const data_asset_module_1 = require("./modules/data-asset/data-asset.module");
-const operation_log_module_1 = require("./modules/operation-log/operation-log.module");
 const process_task_module_1 = require("./modules/process-task/process-task.module");
 const prisma_module_1 = require("./prisma/prisma.module");
 // 这是一个最小健康检查控制器。
@@ -50,16 +48,12 @@ exports.AppModule = AppModule = __decorate([
         imports: [
             // PrismaModule 提供全局数据库访问能力。
             prisma_module_1.PrismaModule,
-            // 预留的认证模块，当前还没有真正展开。
-            auth_module_1.AuthModule,
             // 总览模块。
             dashboard_module_1.DashboardModule,
             // 数据资产模块，是当前最核心的业务模块。
             data_asset_module_1.DataAssetModule,
             // 任务模块。
             process_task_module_1.ProcessTaskModule,
-            // 操作日志模块，目前只有骨架。
-            operation_log_module_1.OperationLogModule,
         ],
         controllers: [HealthController],
     })

@@ -362,3 +362,347 @@
 
 1. `Debug Backend (tsx)`
 2. `Run Built Backend`
+
+## 补充步骤 3.1 启动配置对齐参考项目
+
+### 状态
+
+已完成。
+
+### 本步目标
+
+1. 先不补 Docker 和 Helm
+2. 先把启动配置层改成兼容参考项目的部署风格
+3. 为后续适配 Docker 和华为云打基础
+
+### 本步操作
+
+1. 调整了 `src/main.ts`
+2. 启动时优先读取：
+   1. `SERVER_HOST`
+   2. `SERVER_PORT`
+   3. `SSL_CERT_FILE`
+   4. `SSL_KEY_FILE`
+3. 保留了旧字段兼容：
+   1. `HTTPS_PORT`
+   2. `HTTPS_PFX_PATH`
+   3. `HTTPS_PFX_PASSPHRASE`
+4. 新增了 HTTPS 证书双模式启动逻辑：
+   1. 优先 `crt/key`
+   2. 回退 `pfx`
+5. 新增了兼容探针路径：`GET /health`
+6. 保留原有业务健康检查路径：`GET /api/v1/health`
+7. 更新了 `.env`
+   1. 增加 `SERVER_HOST`
+   2. 增加 `SERVER_PORT`
+   3. 本地示例端口暂保留为 `34430`
+8. 更新了以下文档：
+   1. `README.md`
+   2. `docs/使用说明.md`
+   3. `docs/代码入口与调用流程.md`
+
+### 当前结果
+
+1. 当前项目已经能够识别参考项目风格的服务地址和端口配置
+2. 当前项目已经为后续 Docker / 华为云适配准备好 `crt/key` 证书入口
+3. 当前本地 Windows 开发方式仍可继续使用 `pfx`
+
+### 下一步建议
+
+1. 先执行本地构建和启动验证
+2. 确认 `/health` 与 `/api/v1/health` 都能正常访问
+3. 用户确认后，再进入下一步 Docker 骨架补齐
+
+## 步骤 3.2 补齐 Docker 运行骨架
+
+### 状态
+
+已完成。
+
+### 本步目标
+
+1. 让当前项目具备参考项目风格的 Docker 启动方式
+2. 暂不补 Helm / 华为云模板
+3. 先把本地容器运行所需文件补齐
+
+### 本步操作
+
+1. 新增了 `Dockerfile`
+2. 新增了 `.dockerignore`
+3. 新增了 `docker-compose.yml`
+4. 新增了 `scripts/entrypoint.sh`
+5. 新增了 Docker 说明文档：`docs/Docker使用说明.md`
+6. 更新了：
+   1. `.gitignore`
+   2. `README.md`
+   3. `docs/使用说明.md`
+
+### 当前 Docker 设计
+
+1. 容器内部统一使用 `8443`
+2. 入口脚本会：
+   1. 检查或生成 `crt/key`
+   2. 执行 `npx prisma migrate deploy`
+   3. 启动 `node dist/main.js`
+3. `docker-compose.yml` 默认挂载：
+   1. `./data:/app/data`
+   2. `./certs:/app/certs`
+
+### 当前结果
+
+1. 当前项目已经具备本地 Docker 运行骨架
+2. 当前配置方式已经和参考项目的端口、证书、入口脚本风格基本一致
+3. 后续可以继续补 Helm / CCE 对接文件
+
+### 本地验证结果
+
+1. `docker compose config` 已通过
+2. `docker compose build` 已通过
+3. 容器可以成功启动
+4. 已实测返回 `200`：
+   1. `GET /health`
+   2. `GET /api/v1/health`
+5. 验证完成后已执行 `docker compose down`，没有持续占用 `8443`
+
+### 下一步建议
+
+1. 下一步进入 Helm / 华为云适配
+2. 需要补 `helm/Chart.yaml` 与 `helm/templates/*`
+3. 目标是继续对齐参考项目的 `Service + Ingress + publicUrl + 443 -> 8443` 模型
+
+## 步骤 3.3 补齐 Helm / 华为云适配骨架
+
+### 状态
+
+已完成。
+
+### 本步目标
+
+1. 对齐参考项目的 Helm chart 结构
+2. 让当前项目具备 `Service + Ingress + ConfigMap + Deployment` 部署能力
+3. 补上 SQLite 场景下必须的持久化卷配置
+
+### 本步操作
+
+1. 新增了 `helm/Chart.yaml`
+2. 新增了 `helm/values.yaml`
+3. 新增了 `helm/values-production.yaml`
+4. 新增了：
+   1. `helm/templates/_helpers.tpl`
+   2. `helm/templates/configmap.yaml`
+   3. `helm/templates/deployment.yaml`
+   4. `helm/templates/service.yaml`
+   5. `helm/templates/ingress.yaml`
+   6. `helm/templates/pvc.yaml`
+   7. `helm/templates/hpa.yaml`
+   8. `helm/templates/pdb.yaml`
+5. 新增了部署文档：`docs/Helm与华为云部署说明.md`
+6. 更新了：
+   1. `README.md`
+   2. `docs/使用说明.md`
+
+### 当前 Helm 设计
+
+1. Pod 内部端口：`8443`
+2. Service 端口：`8443`
+3. Ingress 前端端口：`443`
+4. 探针路径统一使用：`/health`
+5. 通过 `ConfigMap` 下发：
+   1. `DATABASE_URL`
+   2. `SERVER_HOST`
+   3. `SERVER_PORT`
+   4. `SSL_CERT_FILE`
+   5. `SSL_KEY_FILE`
+6. 支持：
+   1. Ingress TLS Secret
+   2. 后端证书 Secret 挂载
+   3. PVC 持久化卷
+
+### SQLite 相关限制
+
+1. 当前默认 `replicaCount = 1`
+2. 当前默认 `autoscaling.enabled = false`
+3. 当前默认 `persistence.enabled = true`
+4. 原因是 SQLite 不适合当前阶段直接多副本
+
+### 本地验证结果
+
+1. `helm lint .\helm` 已通过
+2. `helm template gaussian-backend-v1 .\helm -n roboshop` 已通过
+3. 当前验证属于静态渲染验证，还没有连接真实 CCE 集群
+
+### 下一步建议
+
+1. 如果要继续云上验证，下一步就需要准备：
+   1. `image.repository`
+   2. `image.tag`
+   3. `imagePullSecrets`
+   4. `ingress.publicUrl`
+   5. `kubernetes.io/elb.id`
+   6. `ingress TLS Secret`
+   7. `PVC / StorageClass`
+2. 如果后面准备多副本部署，建议先把数据库从 SQLite 切到 MySQL
+
+## 步骤 3.4 收口华为云发布参数与命令
+
+### 状态
+
+已完成。
+
+### 本步目标
+
+1. 尽量复用参考项目已经确认过的华为云部署参数
+2. 让当前项目具备一套可直接参考执行的发布命令
+3. 将仍需人工确认的参数缩减到最少
+
+### 本步操作
+
+1. 在 `helm/values.yaml` 中写入共享 ELB：
+   1. `32bb8857-86a4-475b-b80a-f650ab200a8a`
+2. 在 `helm/values-production.yaml` 中写入：
+   1. 镜像仓库 `swr.cn-north-4.myhuaweicloud.com/seer_develop/sep-gaussian-backend-demo`
+   2. 公网地址 `https://sep-gaussian-backend.cloud-data-dev.seer-group.com/`
+   3. 共享 ELB `32bb8857-86a4-475b-b80a-f650ab200a8a`
+   4. `default-secret`
+   5. `sep-gaussian-backend-ingress-tls`
+3. 新增文档：`docs/华为云发布命令.md`
+4. 更新了：
+   1. `README.md`
+   2. `docs/Helm与华为云部署说明.md`
+   3. `docs/使用说明.md`
+
+### 当前结果
+
+1. 当前生产覆盖值已经不再包含 ELB ID 占位符
+2. 当前已经具备镜像推送、TLS Secret 创建、Helm 安装、部署后检查命令
+3. 当前仍需要人工最终确认：
+   1. 域名
+   2. 命名空间
+   3. StorageClass
+   4. 是否启用后端证书 Secret
+
+### 下一步建议
+
+1. 如果你提供真实命名空间与域名，我可以继续把发布命令改成最终可执行版
+2. 如果你已经有 kubeconfig，也可以继续进入真实 `helm upgrade --install` 部署准备
+
+## 步骤 3.5 收口生产域名与命名空间，并解释后端证书 Secret
+
+### 状态
+
+已完成。
+
+### 本步输入
+
+1. 生产域名：`sep-gaussian-backend.cloud-data-dev.seer-group.com`
+2. 命名空间：`roboshop`
+3. 集群没有默认 `StorageClass`
+
+### 本步操作
+
+1. 更新了 `helm/values-production.yaml`
+   1. 公网地址改为 `https://sep-gaussian-backend.cloud-data-dev.seer-group.com/`
+   2. Ingress TLS Secret 改为 `sep-gaussian-backend-ingress-tls`
+2. 更新了发布命令文档：
+   1. 命名空间统一改为 `roboshop`
+   2. 域名统一改为 `sep-gaussian-backend.cloud-data-dev.seer-group.com`
+   3. 补充了 “4.4 是什么意思” 的解释
+3. 更新了：
+   1. `README.md`
+   2. `docs/Helm与华为云部署说明.md`
+
+### 当前结果
+
+1. 生产域名和命名空间已经收口
+2. 当前仍然缺少最后一个真实基础设施参数：`StorageClass` 名字
+3. 我当前建议：
+   1. 不启用后端证书 Secret
+   2. 先继续让容器自动生成后端证书
+   3. 重点保证 Ingress 前端证书 Secret 正确
+
+### 下一步建议
+
+1. 你只要再告诉我 `StorageClass` 名字
+2. 我就可以把华为云发布命令整理成最后版本
+
+## 步骤 3.6 收口 StorageClass 并整理最终发布假设
+
+### 状态
+
+已完成。
+
+### 本步输入
+
+用户提供的可用 `StorageClass` 列表中包含：
+
+1. `csi-disk`
+2. `csi-disk-topology`
+3. `csi-nas`
+4. 其他若干类
+
+### 本步决策
+
+当前项目采用：
+
+`csi-disk-topology`
+
+### 选择原因
+
+1. 当前项目是单副本 `SQLite`
+2. 更适合块存储，不建议放到对象存储或共享文件系统类上
+3. `WaitForFirstConsumer` 更适合 CCE 调度与磁盘绑定
+
+### 本步操作
+
+1. 更新了 `helm/values-production.yaml`
+   1. `persistence.storageClassName = csi-disk-topology`
+2. 更新了：
+   1. `docs/华为云发布命令.md`
+   2. `docs/Helm与华为云部署说明.md`
+   3. `README.md`
+
+### 当前最终发布假设
+
+1. 命名空间：`roboshop`
+2. 域名：`sep-gaussian-backend.cloud-data-dev.seer-group.com`
+3. StorageClass：`csi-disk-topology`
+4. Ingress TLS Secret：`sep-gaussian-backend-ingress-tls`
+5. Image Pull Secret：`default-secret`
+6. 后端服务证书：继续由容器自动生成
+
+### 下一步建议
+
+1. 如果 `sep-gaussian-backend-ingress-tls` 还没创建，先创建它
+2. 如果 `default-secret` 已存在，就可以直接执行 `helm upgrade --install`
+
+## 步骤 3.7 统一镜像命名为 sep 前缀
+
+### 状态
+
+已完成。
+
+### 本步输入
+
+1. 用户确认：镜像名前缀统一使用 `sep-`
+
+### 本步操作
+
+1. 更新了 `helm/values.yaml`
+   1. 默认镜像仓库改为 `sep-gaussian-backend-demo`
+2. 更新了 `helm/values-production.yaml`
+   1. 生产镜像仓库改为 `swr.cn-north-4.myhuaweicloud.com/seer_develop/sep-gaussian-backend-demo`
+3. 更新了 `docs/华为云发布命令.md`
+   1. 构建命令改为 `docker build -t sep-gaussian-backend-demo:$tag .`
+   2. 打标签命令改为 `docker tag sep-gaussian-backend-demo:$tag ...`
+   3. 推送命令改为推送 `sep-gaussian-backend-demo`
+
+### 当前结果
+
+1. 当前项目发布相关镜像配置已经统一到 `sep-` 前缀
+2. 后续只要推送同名 tag，Helm 部署就不会继续拉取旧仓库名
+
+### 下一步建议
+
+1. 先确认本地是否已有 `sep-gaussian-backend-demo:0.1.0`
+2. 如果没有，就重新构建并推送到 SWR
+3. 推送成功后再重启 `Deployment`

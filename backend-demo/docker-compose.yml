@@ -1,0 +1,17 @@
+services:
+  gaussian-backend-demo:
+    build: .
+    image: sep-gaussian-backend-demo:0.1.0
+    container_name: gaussian-backend-demo
+    ports:
+      - "8443:8443"
+    environment:
+      DATABASE_URL: "file:./data/roboshop.db"
+      SERVER_HOST: "0.0.0.0"
+      SERVER_PORT: "8443"
+      SSL_CERT_FILE: "/app/certs/server.crt"
+      SSL_KEY_FILE: "/app/certs/server.key"
+    volumes:
+      - ./data:/app/data
+      - ./certs:/app/certs
+    restart: unless-stopped

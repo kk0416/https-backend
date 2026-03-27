@@ -1,10 +1,8 @@
 import { Controller, Get, Module } from '@nestjs/common';
 
 import { ok } from './common/dto/api-response';
-import { AuthModule } from './modules/auth/auth.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { DataAssetModule } from './modules/data-asset/data-asset.module';
-import { OperationLogModule } from './modules/operation-log/operation-log.module';
 import { ProcessTaskModule } from './modules/process-task/process-task.module';
 import { PrismaModule } from './prisma/prisma.module';
 
@@ -30,16 +28,12 @@ class HealthController {
   imports: [
     // PrismaModule 提供全局数据库访问能力。
     PrismaModule,
-    // 预留的认证模块，当前还没有真正展开。
-    AuthModule,
     // 总览模块。
     DashboardModule,
     // 数据资产模块，是当前最核心的业务模块。
     DataAssetModule,
     // 任务模块。
     ProcessTaskModule,
-    // 操作日志模块，目前只有骨架。
-    OperationLogModule,
   ],
   controllers: [HealthController],
 })

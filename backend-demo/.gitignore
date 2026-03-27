@@ -1,6 +1,9 @@
 node_modules/
 dist/
 .env
+.docker-tmp-config/
 *.db
 *.sqlite
 *.sqlite3
+certs/server.crt
+certs/server.key
