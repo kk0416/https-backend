@@ -1,0 +1,23 @@
+[32m[Nest] 17320  - [39m2026/03/27 09:32:35 [32m    LOG[39m [38;5;3m[NestFactory] [39m[32mStarting Nest application...[39m
+[32m[Nest] 17320  - [39m2026/03/27 09:32:35 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mPrismaModule dependencies initialized[39m[38;5;3m +9ms[39m
+[32m[Nest] 17320  - [39m2026/03/27 09:32:35 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mAppModule dependencies initialized[39m[38;5;3m +3ms[39m
+[32m[Nest] 17320  - [39m2026/03/27 09:32:35 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mAuthModule dependencies initialized[39m[38;5;3m +2ms[39m
+[32m[Nest] 17320  - [39m2026/03/27 09:32:35 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mOperationLogModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 17320  - [39m2026/03/27 09:32:35 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mDashboardModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 17320  - [39m2026/03/27 09:32:35 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mDataAssetModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 17320  - [39m2026/03/27 09:32:35 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mProcessTaskModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 17320  - [39m2026/03/27 09:32:35 [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mHealthController {/api/v1}:[39m[38;5;3m +1ms[39m
+[32m[Nest] 17320  - [39m2026/03/27 09:32:35 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/v1/health, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 17320  - [39m2026/03/27 09:32:35 [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mAuthController {/api/v1/auth}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 17320  - [39m2026/03/27 09:32:35 [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mDashboardController {/api/v1/dashboard}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 17320  - [39m2026/03/27 09:32:35 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/v1/dashboard/data-summary, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17320  - [39m2026/03/27 09:32:35 [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mDataAssetController {/api/v1/data-assets}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 17320  - [39m2026/03/27 09:32:35 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/v1/data-assets, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17320  - [39m2026/03/27 09:32:35 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/v1/data-assets/tree, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 17320  - [39m2026/03/27 09:32:35 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/v1/data-assets/graph, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 17320  - [39m2026/03/27 09:32:35 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/v1/data-assets/:id/generate-point-cloud, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 17320  - [39m2026/03/27 09:32:35 [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mProcessTaskController {/api/v1/tasks}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 17320  - [39m2026/03/27 09:32:35 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/v1/tasks, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 17320  - [39m2026/03/27 09:32:35 [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mOperationLogController {/api/v1/operation-logs}:[39m[38;5;3m +1ms[39m
+[32m[Nest] 17320  - [39m2026/03/27 09:32:35 [32m    LOG[39m [38;5;3m[NestApplication] [39m[32mNest application successfully started[39m[38;5;3m +39ms[39m
+[32m[Nest] 17320  - [39m2026/03/27 09:32:35 [32m    LOG[39m [38;5;3m[Bootstrap] [39m[32m服务已启动: http://127.0.0.1:3000/api/v1/health[39m

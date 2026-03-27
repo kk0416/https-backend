@@ -1,0 +1,202 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum SiteStatus {
+  DISABLED
+  ENABLED
+}
+
+enum DataType {
+  RAW
+  POINT_CLOUD
+  GAUSSIAN
+  MAP_2D
+  MAP_3D
+}
+
+enum DataAssetStatus {
+  UPLOADING
+  QUEUED
+  PROCESSING
+  READY
+  FAILED
+  DELETED
+}
+
+enum TaskType {
+  UPLOAD_RAW
+  GENERATE_POINT_CLOUD
+  GENERATE_2D
+  GENERATE_3D
+  GENERATE_GAUSSIAN
+}
+
+enum TaskStatus {
+  QUEUED
+  RUNNING
+  SUCCESS
+  FAILED
+  CANCELED
+}
+
+enum OperationType {
+  UPLOAD_RAW
+  GENERATE_POINT_CLOUD
+  GENERATE_2D
+  GENERATE_3D
+  GENERATE_GAUSSIAN
+  EDIT
+  DELETE
+  DOWNLOAD
+  VIEW
+}
+
+enum OperationStatus {
+  SUCCESS
+  PROCESSING
+  FAILED
+}
+
+model Site {
+  id        Int      @id @default(autoincrement())
+  siteCode  String   @unique
+  siteName  String
+  status    SiteStatus @default(ENABLED)
+  remark    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  scenes    Scene[]
+  dataAssets DataAsset[]
+  tasks     ProcessTask[]
+  logs      OperationLog[]
+}
+
+model Scene {
+  id        Int      @id @default(autoincrement())
+  siteId    Int
+  sceneCode String
+  sceneName String
+  status    SiteStatus @default(ENABLED)
+  remark    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  site      Site     @relation(fields: [siteId], references: [id])
+  dataAssets DataAsset[]
+  tasks     ProcessTask[]
+  logs      OperationLog[]
+
+  @@unique([siteId, sceneCode])
+  @@index([siteId])
+  @@index([status])
+}
+
+model DataAsset {
+  id            Int             @id @default(autoincrement())
+  siteId        Int
+  sceneId       Int
+  dataType      DataType
+  dataName      String
+  status        DataAssetStatus
+  progress      Int             @default(0)
+  sourceDataId  Int?
+  currentTaskId Int?
+  storagePath   String?
+  fileName      String?
+  fileSize      Int?
+  fileHash      String?
+  metadataJson  String?
+  operatorId    String?
+  operatorName  String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  deletedAt     DateTime?
+
+  site          Site            @relation(fields: [siteId], references: [id])
+  scene         Scene           @relation(fields: [sceneId], references: [id])
+  sourceData    DataAsset?      @relation("DataAssetLineage", fields: [sourceDataId], references: [id])
+  children      DataAsset[]     @relation("DataAssetLineage")
+  sourceTasks   ProcessTask[]   @relation("TaskSourceData")
+  targetTasks   ProcessTask[]   @relation("TaskTargetData")
+  logs          OperationLog[]
+
+  @@index([siteId])
+  @@index([sceneId])
+  @@index([dataType])
+  @@index([status])
+  @@index([sourceDataId])
+  @@index([currentTaskId])
+  @@index([createdAt])
+  @@index([sceneId, dataType, status])
+}
+
+model ProcessTask {
+  id           Int          @id @default(autoincrement())
+  siteId       Int
+  sceneId      Int
+  taskType     TaskType
+  taskTitle    String?
+  sourceDataId Int?
+  targetDataId Int?
+  status       TaskStatus
+  progress     Int          @default(0)
+  paramsJson   String?
+  resultJson   String?
+  errorCode    String?
+  errorMessage String?
+  operatorId   String?
+  operatorName String?
+  createdAt    DateTime     @default(now())
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  updatedAt    DateTime     @updatedAt
+
+  site         Site         @relation(fields: [siteId], references: [id])
+  scene        Scene        @relation(fields: [sceneId], references: [id])
+  sourceData   DataAsset?   @relation("TaskSourceData", fields: [sourceDataId], references: [id])
+  targetData   DataAsset?   @relation("TaskTargetData", fields: [targetDataId], references: [id])
+  logs         OperationLog[]
+
+  @@index([siteId])
+  @@index([sceneId])
+  @@index([taskType])
+  @@index([status])
+  @@index([sourceDataId])
+  @@index([targetDataId])
+  @@index([createdAt])
+  @@index([sceneId, status])
+}
+
+model OperationLog {
+  id            Int             @id @default(autoincrement())
+  siteId        Int
+  sceneId       Int
+  dataId        Int?
+  taskId        Int?
+  operationType OperationType
+  operationDesc String?
+  status        OperationStatus
+  operatorId    String?
+  operatorName  String?
+  createdAt     DateTime        @default(now())
+
+  site          Site            @relation(fields: [siteId], references: [id])
+  scene         Scene           @relation(fields: [sceneId], references: [id])
+  dataAsset     DataAsset?      @relation(fields: [dataId], references: [id])
+  task          ProcessTask?    @relation(fields: [taskId], references: [id])
+
+  @@index([siteId])
+  @@index([sceneId])
+  @@index([dataId])
+  @@index([taskId])
+  @@index([operationType])
+  @@index([status])
+  @@index([createdAt])
+  @@index([sceneId, createdAt])
+}
