@@ -57,6 +57,7 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/data ./data
 
 RUN mkdir -p /app/certs /app/data \
+    && sed -i 's/\r$//' /app/scripts/entrypoint.sh \
     && chmod +x /app/scripts/entrypoint.sh
 
 EXPOSE 8443

@@ -884,3 +884,115 @@
 
 1. 后续再出现类似认知误区时，可以继续追加到这份文档
 2. 项目中的关键理解偏差开始有统一留档位置
+
+## 步骤 3.14 补充发布链路相关误区记录
+
+### 状态
+
+已完成。
+
+### 本步目标
+
+1. 把“kubectl / helm 所在系统是否决定部署结果”的误区补记到误区文档
+2. 固定当前项目对发布链路的正确理解
+
+### 本步操作
+
+1. 更新了 `docs/误区记录.md`
+2. 新增误区内容：
+   1. 误以为 Windows / Linux 的核心差别在 `kubectl / helm`
+   2. 误以为 `kubectl / helm` 会决定最终部署环境
+3. 写入了对应澄清：
+   1. 真正关键的是镜像构建环境
+   2. `kubectl / helm` 主要是远程控制器
+   3. Windows 和 Linux 在这层主要区别是 shell 和工具体验
+
+### 当前结果
+
+1. 当前项目关于发布链路的关键理解已经被单独留档
+2. 后续再讨论“Windows 发布”和“Linux 发布”时，可以先回看这条误区记录
+
+## 步骤 3.15 修正 Helm 中 Recreate 与 rollingUpdate 冲突
+
+### 状态
+
+已完成。
+
+### 本步背景
+
+1. 执行 `helm upgrade --install ...` 时出现：
+   1. `spec.strategy.rollingUpdate: Forbidden`
+   2. 原因是 `strategy.type = Recreate` 时仍然渲染了 `rollingUpdate`
+
+### 本步操作
+
+1. 更新了 `helm/templates/deployment.yaml`
+   1. 只有在 `strategy.type = RollingUpdate` 时才输出 `rollingUpdate`
+2. 更新了 `helm/values.yaml`
+   1. 删除了重复的 `strategy` 配置块
+   2. 避免默认值内部自相冲突
+
+### 当前结果
+
+1. 生产环境可以继续使用 `strategy.type = Recreate`
+2. 不会再因为模板里残留 `rollingUpdate` 子字段导致 Deployment 校验失败
+3. 已实际验证：
+   1. `helm upgrade --install gaussian-backend-v1 ... --set image.tag=0.1.1`
+   2. 输出 `STATUS: deployed`
+   3. 当前冲突已解决
+
+## 步骤 3.16 发布 0.1.1 镜像后的 rollout 排查
+
+### 状态
+
+进行中。
+
+### 当前已确认信息
+
+1. Deployment 镜像已经切到：
+   1. `swr.cn-north-4.myhuaweicloud.com/seer_develop/sep-gaussian-backend-demo:0.1.1`
+2. 之前 `0.1.1` 镜像不存在导致 `ErrImagePull`
+3. 重新登录 SWR 后，`docker buildx build ...:0.1.1 --push .` 已重新执行
+4. 当前执行：
+   1. `kubectl rollout status deployment/gaussian-backend-v1-gaussian-backend-demo -n roboshop --timeout=180s`
+5. 当前输出：
+   1. `deployment "gaussian-backend-v1-gaussian-backend-demo" exceeded its progress deadline`
+
+### 当前判断
+
+1. 说明本次 rollout 仍未在超时时间内进入可用状态
+2. 但还不能仅凭这条信息判断具体原因
+3. 需要继续查看当前 Pod 状态和最新事件
+
+## 步骤 3.17 修复 entrypoint.sh 的 CRLF 导致容器启动失败
+
+### 状态
+
+已完成。
+
+### 本步背景
+
+1. Pod 已经能成功拉取 `0.1.1` 镜像
+2. 但容器进入 `CrashLoopBackOff`
+3. `kubectl logs` 输出：
+   1. `exec /app/scripts/entrypoint.sh: no such file or directory`
+
+### 根因
+
+1. `scripts/entrypoint.sh` 在仓库中是 Windows `CRLF` 换行
+2. 容器内按 shebang 执行时，会把解释器路径识别成 `/bin/sh\r`
+3. 因此入口脚本虽然存在，但 Linux 无法正常执行
+
+### 本步操作
+
+1. 更新了 `Dockerfile`
+   1. 在 runner 阶段执行 `sed -i 's/\\r$//' /app/scripts/entrypoint.sh`
+   2. 构建镜像时强制把脚本转成 `LF`
+2. 新增 `.gitattributes`
+   1. `*.sh text eol=lf`
+   2. 让后续提交时 shell 脚本优先保持 Linux 换行
+
+### 当前结果
+
+1. 后续重新构建的镜像不应再因为 `entrypoint.sh` 的换行问题崩溃
+2. 下一步应重新构建并推送一个新 tag，再执行 Helm 升级

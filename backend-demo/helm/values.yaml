@@ -109,12 +109,6 @@ containerSecurityContext:
     drop:
       - ALL
 
-strategy:
-  type: RollingUpdate
-  rollingUpdate:
-    maxSurge: 1
-    maxUnavailable: 0
-
 probes:
   startup:
     scheme: HTTPS
