@@ -18,6 +18,9 @@ image:
 
 imagePullSecrets: []
 
+strategy:
+  type: Recreate
+
 service:
   # 华为云 CCE 的共享 ELB Ingress 一般转发到 NodePort Service。
   type: NodePort
