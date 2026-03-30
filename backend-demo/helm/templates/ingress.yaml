@@ -1,0 +1,44 @@
+{{- if .Values.ingress.enabled }}
+{{- $host := include "gaussian-backend-demo.ingressHost" . -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "gaussian-backend-demo.fullname" . }}
+  labels:
+    {{- include "gaussian-backend-demo.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- range .Values.ingress.tls }}
+    - secretName: {{ .secretName }}
+      hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+    {{- end }}
+  {{- end }}
+  rules:
+    - host: {{ $host | quote }}
+      http:
+        paths:
+          {{- range .Values.ingress.paths }}
+          - path: {{ .path }}
+            backend:
+              service:
+                name: {{ include "gaussian-backend-demo.fullname" $ }}
+                port:
+                  number: {{ $.Values.service.port }}
+            {{- with .property }}
+            property:
+              {{- toYaml . | nindent 14 }}
+            {{- end }}
+            pathType: {{ .pathType }}
+          {{- end }}
+{{- end }}

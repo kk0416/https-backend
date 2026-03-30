@@ -1,0 +1,13 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "gaussian-backend-demo.fullname" . }}
+  labels:
+    {{- include "gaussian-backend-demo.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "gaussian-backend-demo.selectorLabels" . | nindent 6 }}
+{{- end }}

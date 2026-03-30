@@ -1,0 +1,13 @@
+apiVersion: v2
+name: gaussian-backend-demo
+description: Gaussian Backend Demo Helm Chart（华为云 CCE / Kubernetes 部署）
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - gaussian
+  - nestjs
+  - fastify
+  - https
+  - sqlite
+  - cce

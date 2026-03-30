@@ -1,0 +1,142 @@
+# ============================================================
+# gaussian-backend-demo - Helm values
+# 说明:
+# 1. ingress.publicUrl 接收完整 URL。
+# 2. Ingress spec.rules.host 会自动提取其中的 hostname 部分。
+# 3. 当前项目默认使用 SQLite，因此默认建议单副本 + 持久化卷。
+# ============================================================
+
+replicaCount: 1
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: sep-gaussian-backend-demo
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+service:
+  # 华为云 CCE 的共享 ELB Ingress 一般转发到 NodePort Service。
+  type: NodePort
+  port: 8443
+  targetPort: 8443
+  sessionAffinity: None
+
+server:
+  host: 0.0.0.0
+  port: 8443
+
+database:
+  # SQLite 仍然用于第一版快速上线。
+  # 注意：如果 Pod 被重建而没有持久化卷，数据库文件会丢失。
+  url: file:./data/roboshop.db
+
+tls:
+  certFile: /app/certs/server.crt
+  keyFile: /app/certs/server.key
+  existingSecret: ""
+  secretKeys:
+    cert: server.crt
+    key: server.key
+
+persistence:
+  enabled: true
+  existingClaim: ""
+  storageClassName: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 5Gi
+  mountPath: /app/data
+
+ingress:
+  enabled: true
+  className: "cce"
+  publicUrl: "https://gaussian-backend.example.com/"
+  annotations:
+    kubernetes.io/ingress.class: cce
+    kubernetes.io/elb.class: performance
+    kubernetes.io/elb.id: "32bb8857-86a4-475b-b80a-f650ab200a8a"
+    kubernetes.io/elb.port: "443"
+    kubernetes.io/elb.pool-protocol: "https"
+    kubernetes.io/elb.lb-algorithm: ROUND_ROBIN
+    kubernetes.io/elb.client_timeout: "300"
+    kubernetes.io/elb.member_timeout: "300"
+    kubernetes.io/elb.keepalive_timeout: "300"
+  paths:
+    - path: /
+      property:
+        ingress.beta.kubernetes.io/url-match-mode: STARTS_WITH
+      pathType: ImplementationSpecific
+  tls:
+    - secretName: gaussian-backend-ingress-tls
+      hosts:
+        - gaussian-backend.example.com
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+
+autoscaling:
+  # SQLite 第一版不建议多副本，因此默认关闭。
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+  behavior: {}
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+
+podAnnotations: {}
+podSecurityContext: {}
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
+
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+
+probes:
+  startup:
+    scheme: HTTPS
+    path: /health
+    initialDelaySeconds: 0
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 30
+  liveness:
+    scheme: HTTPS
+    path: /health
+    initialDelaySeconds: 10
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    scheme: HTTPS
+    path: /health
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+extraEnv: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

@@ -1,0 +1,54 @@
+# ============================================================
+# values-production.yaml - 生产 / 测试环境覆盖值示例
+# 用法:
+# helm upgrade --install gaussian-backend-v1 .\helm -f .\helm\values-production.yaml
+# ============================================================
+
+replicaCount: 1
+
+image:
+  repository: swr.cn-north-4.myhuaweicloud.com/seer_develop/sep-gaussian-backend-demo
+  tag: "0.1.0"
+  pullPolicy: Always
+
+imagePullSecrets:
+  - name: default-secret
+
+persistence:
+  enabled: true
+  existingClaim: ""
+  storageClassName: "csi-disk-topology"
+  size: 20Gi
+
+ingress:
+  enabled: true
+  className: "cce"
+  publicUrl: "https://sep-gaussian-backend.cloud-data-dev.seer-group.com/"
+  annotations:
+    kubernetes.io/ingress.class: cce
+    kubernetes.io/elb.class: performance
+    kubernetes.io/elb.id: "32bb8857-86a4-475b-b80a-f650ab200a8a"
+    kubernetes.io/elb.port: "443"
+    kubernetes.io/elb.pool-protocol: "https"
+    kubernetes.io/elb.lb-algorithm: ROUND_ROBIN
+    kubernetes.io/elb.client_timeout: "300"
+    kubernetes.io/elb.member_timeout: "300"
+    kubernetes.io/elb.keepalive_timeout: "300"
+  tls:
+    - secretName: sep-gaussian-backend-ingress-tls
+      hosts:
+        - sep-gaussian-backend.cloud-data-dev.seer-group.com
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+autoscaling:
+  enabled: false
+
+podDisruptionBudget:
+  enabled: false
