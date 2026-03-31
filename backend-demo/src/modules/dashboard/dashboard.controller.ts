@@ -3,10 +3,9 @@ import { Controller, Get, Query } from '@nestjs/common';
 import { ok } from '../../common/dto/api-response';
 import { DashboardService } from './dashboard.service';
 
-@Controller('dashboard')
+@Controller('dashboard') //设置路由前缀为 '/dashboard'
 export class DashboardController {
   // Controller 负责接收 HTTP 请求，再把工作交给 service。
-  // 对应 Qt/C++ 习惯，可以把它理解成“接口入口层”。
   constructor(private readonly dashboardService: DashboardService) {}
 
   @Get('data-summary')

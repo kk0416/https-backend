@@ -11,6 +11,10 @@ import { createPrismaClientOptions } from './prisma-client-options';
 //
 // 同时它又是一个 Nest Injectable，
 // 所以可以像普通 service 一样被注入到业务模块中。
+
+//implements OnModuleInit, OnModuleDestroy 表明自己实现了 Nest 的两个生命周期接口，
+// Nest 会在模块初始化时调用 onModuleInit()，
+// 在模块销毁时调用 onModuleDestroy()。
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   constructor() {

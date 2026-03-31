@@ -25,12 +25,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
       : 'internal server error';
 
     // 如果不是标准 HttpException，说明很可能是代码 bug 或未预料错误。
-    // 这里单独打日志，方便排查。
     if (!(exception instanceof HttpException)) {
       this.logger.error('Unhandled exception', exception instanceof Error ? exception.stack : String(exception));
     }
-
-    // 最终无论发生什么，返回给前端的结构都保持统一。
+    this.logger.debug(`Exception caught: ${message}, status: ${status}, path: ${request.url}`);
     response.status(status).send({
       code: status,
       message,
@@ -41,8 +39,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
     });
   }
 
-  // 某些 HttpException 的响应体可能是字符串、对象或字符串数组。
-  // 这里统一整理成 string。
   private normalizeHttpExceptionMessage(exception: HttpException): string {
     const response = exception.getResponse();
 
