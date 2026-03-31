@@ -427,3 +427,32 @@ new NotFoundException("...")    // 创建异常对象
 1. 可选属性 `age?: number` 等价于 `age: number | undefined`
 2. 索引签名 `[key: string]: T` 会限制所有属性（包括明确定义的）的值类型必须符合 `T`
 3. 索引签名类型要包含所有明确定义的属性类型
+
+**复习题 13-15（联合类型 & type vs interface & 字面量类型）：**
+- ✅ 联合类型只允许声明的值（`"cancelled"` 不在 `Status` 里，报错）
+- ⚠️ type vs interface 区别（方向对但太笼统，需记住具体差异）
+- ✅ 字面量类型只能赋同一个值（`"hello"` 不能改成 `"world"`）
+
+**type vs interface 核心区别：**
+
+| | `type` | `interface` |
+|---|---|---|
+| 能定义什么 | 任何类型：联合、交叉、基本类型别名、元组 | 只能定义对象形状和函数签名 |
+| 扩展方式 | `&` 交叉类型 | `extends` 继承 |
+| 声明合并 | ❌ 不支持（同名报错） | ✅ 同名自动合并 |
+| 冲突处理 | `&` 会合并为 `never` | `extends` 直接编译报错 |
+
+**经验法则：**
+- 描述对象/类的结构 → `interface`（DTO、Service 接口）
+- 联合类型、工具类型、非对象类型 → `type`
+
+```typescript
+// 适合用 type
+type TaskStatus = "pending" | "running" | "done";
+
+// 适合用 interface
+interface CreateTaskDto {
+  name: string;
+  config: Record<string, unknown>;
+}
+```
