@@ -996,3 +996,29 @@
 
 1. 后续重新构建的镜像不应再因为 `entrypoint.sh` 的换行问题崩溃
 2. 下一步应重新构建并推送一个新 tag，再执行 Helm 升级
+
+## 步骤 3.18 补充 buildx 之后的固定动作说明
+
+### 状态
+
+已完成。
+
+### 本步目标
+
+1. 补充说明 `docker buildx build --push` 之后还必须做什么
+2. 防止只推镜像，不做 Helm 升级和 rollout 验证
+
+### 本步操作
+
+1. 更新了 `docs/Ubuntu极简发布清单.md`
+   1. 增加 `buildx` 之后的固定动作清单
+2. 更新了 `docs/Ubuntu编译并发布到华为云步骤.md`
+   1. 增加 `buildx --push` 之后必须继续 Helm 升级的说明
+
+### 当前结果
+
+1. 当前发布文档已经明确：
+   1. `buildx --push` 只负责推镜像
+   2. 后面还要 `helm upgrade`
+   3. 还要 `kubectl rollout status`
+   4. 还要 `curl` 做公网验证

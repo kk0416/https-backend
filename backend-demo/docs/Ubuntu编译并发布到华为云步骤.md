@@ -233,6 +233,24 @@ docker buildx build \
 3. 生成运行镜像
 4. 直接推送到华为云 `SWR`
 
+### 9.4 buildx 之后不要停
+
+执行完：
+
+`docker buildx build --platform linux/amd64 --provenance=false --sbom=false -t ${IMAGE_REPO}:${TAG} --push .`
+
+之后还必须继续做：
+
+1. `helm upgrade --install ... --set image.tag=${TAG}`
+2. `kubectl rollout status`
+3. `kubectl get pods`
+4. `curl https://域名/health`
+
+也就是：
+
+1. `buildx --push` 只负责把镜像放进 `SWR`
+2. 真正让集群用上这个新镜像，还需要继续 Helm 升级
+
 ### 9.3 推送成功的关键信号
 
 输出里通常会出现：
