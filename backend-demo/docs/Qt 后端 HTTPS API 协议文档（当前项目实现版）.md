@@ -17,6 +17,8 @@
 | 健康检查 | `GET /health` | Docker / Helm / 华为云探针兼容健康检查 |
 | 总览统计 | `GET /api/v1/dashboard/data-summary` | 同时返回数据数量和任务数量统计 |
 | 数据管理 | `GET /api/v1/data-assets` | 数据资产分页列表 |
+| 数据管理 | `GET /api/v1/data-assets/upload-options` | 返回上传弹窗使用的现场和场景选项 |
+| 数据管理 | `POST /api/v1/data-assets/upload-raw` | 上传原始数据并创建上传任务记录 |
 | 数据管理 | `GET /api/v1/data-assets/tree` | 基于 `sourceDataId` 生成树状结构 |
 | 数据管理 | `GET /api/v1/data-assets/graph` | 基于 `sourceDataId` 生成关系图 |
 | 任务管理 | `GET /api/v1/tasks` | 任务分页列表 |
@@ -281,6 +283,8 @@ Accept: application/json
 | 探针健康检查 | `GET /health` | 探针使用 |
 | 首页总览统计 | `GET /api/v1/dashboard/data-summary` | 同时返回数据数量和任务数量 |
 | 数据列表页 | `GET /api/v1/data-assets` | 支持分页和筛选 |
+| 原始数据上传弹窗 | `GET /api/v1/data-assets/upload-options` | 获取现场和场景下拉选项 |
+| 原始数据上传提交 | `POST /api/v1/data-assets/upload-raw` | 提交文件和上传元数据 |
 | 树状视图 | `GET /api/v1/data-assets/tree` | 直接返回树节点数组 |
 | 关系图视图 | `GET /api/v1/data-assets/graph` | 返回 `nodes + edges` |
 | 任务列表页 | `GET /api/v1/tasks` | 支持分页和状态筛选 |
@@ -582,7 +586,133 @@ GET /api/v1/tasks
 }
 ```
 
-### 7.8 从原始数据创建点云生成任务
+### 7.8 获取原始数据上传可选项
+
+```http
+GET /api/v1/data-assets/upload-options
+```
+
+说明：
+
+- 当前用于“上传原始数据”弹窗。
+- 返回所有现场，以及每个现场下属的场景列表。
+- 当前不接收请求参数。
+
+成功响应示例：
+
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "sites": [
+      {
+        "id": 2,
+        "siteCode": "site-a",
+        "siteName": "A 线",
+        "scenes": [
+          {
+            "id": 2,
+            "sceneCode": "warehouse",
+            "sceneName": "仓库"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### 7.9 上传原始数据
+
+```http
+POST /api/v1/data-assets/upload-raw
+```
+
+请求类型：
+
+- `multipart/form-data`
+
+表单字段：
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `siteId` | string | 是 | 现场 ID，代码中会转为整数 |
+| `sceneId` | string | 是 | 场景 ID，代码中会转为整数 |
+| `dataName` | string | 否 | 数据名称；为空时会退回到“原始文件名去掉扩展名” |
+| `file` | binary | 是 | 上传文件本体 |
+
+请求体说明：
+
+- 当前实现通过 Fastify multipart 解析表单。
+- 当前前端实现建议按 `siteId -> sceneId -> dataName -> file` 的顺序追加字段，`file` 放最后。
+
+业务规则：
+
+- 请求必须是有效的 `multipart/form-data`，否则返回 `400`。
+- `file` 必须存在，否则返回 `400`。
+- `siteId` 必须是有效整数，否则返回 `400`。
+- `sceneId` 必须是有效整数，否则返回 `400`。
+- 上传文件名不能为空，否则返回 `400`。
+- 现场必须存在，否则返回 `404`。
+- 场景必须存在，否则返回 `404`。
+- 场景必须属于所选现场，否则返回 `400`。
+- `dataName` 为空时，自动使用“原始文件名去掉扩展名”作为数据名。
+- 文件会落盘到 `data/uploads/raw/{siteId}/{sceneId}/{原始文件名}`。
+- 同一现场/场景目录下如果已存在同名文件，返回 `400`，不会覆盖旧文件。
+- 上传成功后会创建：
+  - 一条 `DataAsset`
+  - 一条 `ProcessTask`
+  - 一条 `OperationLog`
+- 数据库写入过程使用事务，保证数据资产、任务、资产回写、操作日志要么一起成功，要么一起失败。
+- 如果文件已经写盘，但后续数据库事务失败，服务端会删除刚写入的文件，避免留下脏文件。
+
+成功响应示例：
+
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "assetId": 14,
+    "taskId": 12,
+    "dataName": "absolute-path-check",
+    "fileName": "absolute-path-check-20260401.txt",
+    "fileSize": 19,
+    "storagePath": "data/uploads/raw/2/2/absolute-path-check-20260401.txt",
+    "absolutePath": "D:\\docker-images\\gaussian\\backend-demo\\data\\uploads\\raw\\2\\2\\absolute-path-check-20260401.txt",
+    "status": "ready"
+  }
+}
+```
+
+错误响应示例 1：现场参数非法
+
+```json
+{
+  "code": 400,
+  "message": "invalid site id",
+  "data": {
+    "path": "/api/v1/data-assets/upload-raw",
+    "timestamp": "2026-04-01T09:30:00.000Z"
+  }
+}
+```
+
+错误响应示例 2：同名文件已存在
+
+```json
+{
+  "code": 400,
+  "message": "file already exists in target directory",
+  "data": {
+    "path": "/api/v1/data-assets/upload-raw",
+    "timestamp": "2026-04-01T09:31:00.000Z"
+  }
+}
+```
+
+### 7.10 从原始数据创建点云生成任务
 
 ```http
 POST /api/v1/data-assets/{id}/generate-point-cloud
@@ -653,6 +783,10 @@ POST /api/v1/data-assets/{id}/generate-point-cloud
 - 总览页轮询 `GET /api/v1/dashboard/data-summary`
 - 数据列表页轮询 `GET /api/v1/data-assets`
 - 任务列表页轮询 `GET /api/v1/tasks`
+- 原始数据上传成功后，建议立即刷新：
+  - `GET /api/v1/data-assets`
+  - `GET /api/v1/tasks`
+  - `GET /api/v1/dashboard/data-summary`
 - 点云任务创建成功后，建议立即刷新：
   - `GET /api/v1/data-assets`
   - `GET /api/v1/tasks`
