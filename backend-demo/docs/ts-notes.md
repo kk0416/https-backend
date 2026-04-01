@@ -456,3 +456,258 @@ interface CreateTaskDto {
   config: Record<string, unknown>;
 }
 ```
+
+---
+
+## Day 4 — 项目架构走读（2026-03-31）
+
+### 项目整体结构
+
+```
+Qt 项目                    NestJS 项目
+─────────                 ──────────
+main.cpp                  main.ts          ← 启动入口
+QApplication              NestFactory      ← 创建应用
+*.pro / CMakeLists        package.json     ← 构建配置 + 依赖管理
+MOC 编译                  tsc 编译         ← 元信息处理
+信号槽机制                依赖注入(DI)     ← 组件间通信
+```
+
+```
+src/
+├── main.ts                          ← 启动入口（创建应用、配置 HTTPS、监听端口）
+├── app.module.ts                    ← 根模块（注册所有子模块）
+├── common/
+│   ├── dto/api-response.ts          ← 统一返回格式 { code, message, data }
+│   ├── filters/all-exceptions.filter.ts ← 全局异常捕获
+│   └── utils/api-format.ts          ← 工具函数（枚举转换、参数解析）
+├── modules/
+│   ├── data-asset/                  ← 数据资产（核心业务）
+│   │   ├── data-asset.module.ts
+│   │   ├── data-asset.controller.ts
+│   │   └── data-asset.service.ts
+│   ├── process-task/                ← 处理任务
+│   └── dashboard/                   ← 总览
+└── prisma/
+    ├── prisma.module.ts             ← 数据库模块（@Global 全局可用）
+    ├── prisma.service.ts            ← 数据库服务（继承 PrismaClient）
+    └── prisma-client-options.ts     ← 数据库连接配置
+```
+
+### main.ts 入口（类比 main.cpp）
+
+```
+Qt main.cpp:                        NestJS main.ts:
+1. QApplication app(argc, argv)     1. 读环境变量 + HTTPS 证书
+2. MainWindow w                     2. NestFactory.create(AppModule)
+3. w.show()                         3. 注册全局规则（路由前缀、异常过滤器）
+4. app.exec()                       4. app.listen(port)
+```
+
+关键代码：
+```typescript
+const app = await NestFactory.create<NestFastifyApplication>(
+  AppModule,              // 根模块，定义整个应用的模块组成
+  new FastifyAdapter()    // HTTP 引擎（类比 Qt 选 QWidget 还是 QML）
+);
+app.setGlobalPrefix('api/v1');                    // 所有接口加前缀
+app.useGlobalFilters(new AllExceptionsFilter());  // 全局异常捕获
+await app.listen(8443, '0.0.0.0');                // 开始监听
+```
+
+### NestJS 三件套：Module → Controller → Service
+
+每个业务模块由三个文件组成：
+
+```
+文件                   角色                 Qt 类比
+────                  ────                 ──────
+*.module.ts           模块注册              qmldir / 组件注册
+*.controller.ts       路由处理（接收请求）    信号槽绑定
+*.service.ts          业务逻辑              业务处理函数
+```
+
+### 请求完整链路
+
+```
+浏览器 GET /api/v1/data-assets?siteId=1&page=2
+  │
+  ▼ Fastify HTTPS 服务器收到请求
+  │ 剥掉 /api/v1 前缀 → /data-assets
+  ▼
+  │ @Controller('data-assets') + @Get() 匹配
+  │ @Query 提取参数：siteId="1", page="2"
+  ▼
+  │ Controller 调用 Service.getList()
+  │  → 参数转换 string → number
+  │  → 构造 where 条件
+  │  → Prisma 查数据库（findMany + count 并行）
+  │  → map 格式化输出
+  ▼
+  │ ok(data) 包装 → { code: 0, message: "ok", data: {...} }
+  ▼
+  JSON 返回浏览器
+
+异常时：Service throw → AllExceptionsFilter 捕获 → 统一错误格式返回
+```
+
+### 装饰器 @ — 类比 Qt 的 Q_OBJECT 宏
+
+```typescript
+@Controller('data-asset')     // "这个类处理 /data-asset 路由"
+@Get()                        // "这个方法处理 GET 请求"
+@Query('siteId')              // "从 URL 参数取 siteId"
+@Param('id')                  // "从路径参数取 id"
+@Post(':id/generate')         // "这个方法处理 POST /data-asset/:id/generate"
+@Injectable()                 // "这个类可以被依赖注入"
+@Module({...})                // "这是一个模块，包含这些 controller 和 service"
+@Global()                     // "这个模块全局可用"
+```
+
+### 依赖注入（DI）
+
+**核心思想：** 你声明"我需要什么"（constructor 参数），框架负责"给你什么"（自动创建和传入）。永远不 new 别人的服务。
+
+```typescript
+// ❌ 手动创建
+class Controller {
+  constructor() {
+    const prisma = new PrismaService();
+    this.service = new DataAssetService(prisma);
+  }
+}
+
+// ✅ 依赖注入
+class Controller {
+  constructor(private readonly service: DataAssetService) {}
+  // 框架自动创建 DataAssetService 并传入
+}
+```
+
+**装配过程（NestFactory.create 时）：**
+```
+1. 扫描 AppModule 的 imports
+2. PrismaModule → new PrismaService()（单例，全局共享）
+3. DataAssetModule → new DataAssetService(prismaService) ← 自动注入
+4. DataAssetController → new DataAssetController(service) ← 自动注入
+```
+
+**三个好处：**
+- **解耦**：Controller 不关心 Service 怎么创建
+- **单例共享**：一个 PrismaService 全项目复用
+- **易替换**：测试时可以换成 Mock
+
+**Qt 类比：**
+```
+@Injectable()              →  Q_OBJECT
+@Module({ providers })     →  qmlRegisterType
+constructor(service)       →  parent->findChild<T>()
+```
+
+### Prisma 数据库层
+
+**角色：** ORM（对象关系映射），类比 Qt 的 QSqlTableModel，但自动生成类型安全的查询代码。
+
+**工作流程：**
+```
+1. schema.prisma 定义表结构（类比手写 CREATE TABLE）
+2. prisma migrate 生成 SQL 并建表
+3. Prisma 自动生成 TypeScript 客户端代码
+4. Service 里调用，有完整类型提示
+```
+
+**Schema 语法对照 C++：**
+```
+Prisma                    C++ 类比
+─────                    ──────
+model Site { }           struct Site { }
+Int                      int
+String                   std::string
+String?                  std::optional<string>
+@id                      PRIMARY KEY
+@default(autoincrement)  AUTOINCREMENT
+@unique                  UNIQUE
+@relation                外键 JOIN
+@@index                  CREATE INDEX
+```
+
+**表关系：**
+```
+Site (工地)
+ └── 1:N ── Scene (场景)
+              ├── 1:N ── DataAsset (数据资产，自引用：源→衍生）
+              ├── 1:N ── ProcessTask (处理任务)
+              └── 1:N ── OperationLog (操作日志)
+```
+
+**查询对照 Qt SQL：**
+```typescript
+// Prisma（类型安全，自动补全）
+const list = await this.prisma.dataAsset.findMany({
+  where: { siteId: 1 },
+  include: { site: true, scene: true },  // 自动 JOIN
+  orderBy: { createdAt: 'desc' },
+  skip: 20, take: 20,
+});
+list[0].site.siteName  // 直接访问关联数据
+
+// Qt SQL（手写字符串，运行时才知道错没错）
+QSqlQuery q("SELECT da.*, s.siteName FROM DataAsset da "
+            "JOIN Site s ON da.siteId = s.id WHERE da.siteId = ?");
+q.bindValue(0, 1);
+```
+
+**常用方法速查：**
+```
+findMany   → SELECT ... WHERE    （查列表）
+findUnique → SELECT ... WHERE id=（查单条）
+create     → INSERT INTO         （新建）
+update     → UPDATE ... SET      （更新）
+count      → SELECT COUNT(*)     （统计）
+$transaction → BEGIN/COMMIT/ROLLBACK（事务）
+```
+
+### 事务（$transaction）
+
+**作用：** 多个数据库操作要么全部成功，要么全部回滚。
+
+**项目实例 generatePointCloud —— 5 步必须原子执行：**
+```
+$transaction 开始
+  1. create ProcessTask         → task.id
+  2. create DataAsset(点云)     → target.id（用了步骤1的结果）
+  3. update ProcessTask         → 补上 targetDataId
+  4. update DataAsset(源)       → 标记 currentTaskId
+  5. create OperationLog        → 写操作记录
+全部成功 → COMMIT    任一失败 → ROLLBACK
+```
+
+**语法：**
+```typescript
+const result = await this.prisma.$transaction(async (tx) => {
+  // tx 是事务专用客户端，事务内必须用 tx 不能用 this.prisma
+  const task = await tx.processTask.create({ data: {...} });
+  const target = await tx.dataAsset.create({ data: { currentTaskId: task.id } });
+  // ...
+  return { taskId: task.id, targetDataId: target.id };
+});
+// 正常返回 → 自动 commit
+// 抛异常 → 自动 rollback
+```
+
+**设计原则：** 参数校验放事务外面，能提前报错就不进事务。
+
+**Qt 类比：**
+```cpp
+db.transaction();
+bool ok = query1.exec() && query2.exec() && query3.exec();
+ok ? db.commit() : db.rollback();
+// Prisma 不用手动 commit/rollback，更简洁
+```
+
+**`??` 空值合并运算符：**
+```typescript
+source.operatorId ?? 'system'
+// 等价于 C++: value.value_or("system")
+// 如果左边是 null/undefined，用右边的默认值
+```
