@@ -711,3 +711,146 @@ source.operatorId ?? 'system'
 // 等价于 C++: value.value_or("system")
 // 如果左边是 null/undefined，用右边的默认值
 ```
+
+---
+
+## Day 5 — 项目代码理解题（2026-04-01）
+
+### Q1：泛型自动推断（Type Argument Inference）
+
+**题目：** `ok({ service: 'gaussian-backend-demo', status: 'running' })` 没写 `<Type>`，返回值类型是什么？
+
+**答案：** TS 从实参自动推断 `T` = `{ service: string; status: string }`，返回类型为：
+```typescript
+{
+  code: number;
+  message: string;
+  data: {
+    service: string;
+    status: string;
+  };
+}
+```
+
+**核心规则：** 泛型函数调用时不写 `<Type>`，TS 会从传入的实参"倒推"出 `T`。这叫**类型参数推断**。项目里每个 `return ok(data)` 都是自动推断的。
+
+### Q2：依赖注入链路
+
+**题目：** `DataAssetController` 里的 `dataAssetService` 和 `prisma` 是谁创建的？
+
+**答案：** NestJS 的 **IoC 容器**自动创建的，不是手动 `new`。
+
+**注入链（倒序解析）：**
+```
+PrismaService（先创建，无依赖）
+    ↓ 注入到
+DataAssetService（拿到 prisma 实例）
+    ↓ 注入到
+DataAssetController（拿到 service 实例）
+```
+
+**关键标记：**
+- `@Injectable()` → 这个类可以被容器管理和注入
+- `@Inject(XxxService)` → 请把 XxxService 的实例塞到这个参数里
+- Module 的 `providers` → 这些 Service 在本模块可用
+- Module 的 `exports` → 其他模块也可以用（PrismaModule export 了 PrismaService）
+
+### Q3：Promise.all 并行查询
+
+**题目：** `Promise.all([findMany(), count()])` 和两个 `await` 依次写，结果一样吗？性能区别？
+
+**答案：** 功能结果一样，性能有差别。
+
+**串行（两个 await）：** 第二个等第一个完成后才开始。假设 findMany 100ms + count 50ms = **总共 150ms**
+
+**并行（Promise.all）：** 两个查询同时发出，总耗时 = 最慢的那个 = **100ms**
+
+**什么时候用：** 两个操作之间没有依赖关系就可以并行。有依赖（比如第 2 步要用第 1 步的结果）只能串行。
+
+**C++ 类比：** 串行 = 依次 exec()；并行 = 两个 QThread 同时跑 + QWaitCondition 等全部完成。
+
+### Prisma vs 手写 SQL
+
+| | 手写 SQL | Prisma |
+|---|---|---|
+| 类型安全 | ❌ 返回 any，写错运行时才发现 | ✅ 自动生成类型，写错编译报错 |
+| 开发速度 | 慢，手拼 SQL | 快，链式调用 + 自动 JOIN |
+| 表结构变了 | 手动改所有 SQL，容易漏 | 改 schema → migrate → 编译器提示哪些要改 |
+| 复杂查询 | ✅ 灵活 | ⚠️ 特别复杂的要用 `$queryRaw` 回退原生 SQL |
+| 性能 | ✅ 可精细优化 | ⚠️ 生成 SQL 不一定最优，大多数场景够用 |
+
+**Qt 类比：** 手写 SQL → QSqlQuery；Prisma → QSqlTableModel + 自动补全
+
+### Q4：异常流转
+
+**题目：** Service 里 `throw new NotFoundException(...)` 没有 try/catch，异常怎么变成 HTTP 响应？
+
+**完整流转：**
+```
+Service throw → 异常冒泡 → NestJS 拦截 → AllExceptionsFilter.catch()
+  1. 判断是 HttpException → 取 status = 404
+  2. 提取 message = 'data asset not found'
+  3. 拼装 { code, message, data: { path, timestamp } }
+  4. response.status(404).send(...)
+→ 前端收到 HTTP 404 + JSON
+```
+
+**前端收到的 JSON：**
+```json
+{
+  "code": 404,
+  "message": "data asset not found",
+  "data": {
+    "path": "/api/v1/data-assets/999/generate-point-cloud",
+    "timestamp": "2026-04-01T08:40:00.000Z"
+  }
+}
+```
+
+### AllExceptionsFilter 与 ApiResponse 的关系
+
+**同一个格式的两条路径：**
+
+| | 正常响应（ok） | 异常响应（Filter） |
+|---|---|---|
+| 触发条件 | Service 正常返回 | Service 抛异常 |
+| 谁包装的 | `ok()` 函数 | `AllExceptionsFilter` |
+| code | 0 | HTTP 状态码（400/404/500） |
+| data | 业务数据 | `{ path, timestamp }` |
+
+Filter 没有调用 `ok()`，而是自己手动拼了结构相同的对象。**格式一致但代码独立**。
+前端只需判断 `code === 0` 就知道成功还是失败。
+
+### Q5：事务与数据一致性
+
+**题目：** 事务里第 1、2 步成功，第 3 步失败，数据库里会怎样？
+
+**答案：** 第 1、2 步创建的数据**不存在**。事务规则：要么全部成功（commit），要么全部回滚（rollback）。第 3 步抛异常 → `$transaction` 自动 rollback → 所有步骤撤销。
+
+**不用事务的后果：** 第 1、2 步的数据留在数据库，task 没关联 target，数据不一致。
+
+### Q6：buildTree 读代码写输出
+
+**题目：** 给定 4 条记录，buildTree 返回几个根节点？
+
+**答案：** 2 个根节点（✅ 答对）
+```
+roots[0]: 原始数据A (id:1)
+  └── 点云A (id:2)
+        └── 高斯A (id:3)
+roots[1]: 原始数据B (id:4)
+```
+判断依据：`sourceDataId === null` → 根节点；`sourceDataId` 指向谁就挂到谁的 children。
+
+### Day 5 测验总结
+
+| 题目 | 考点 | 结果 |
+|------|------|------|
+| Q1 泛型推断 | ok() 返回类型推断 | ❌ 不会 |
+| Q2 依赖注入 | IoC 容器自动创建链路 | ⚠️ 方向对，细节不够 |
+| Q3 Promise.all | 并行 vs 串行性能差异 | ⚠️ 知道慢，说不出具体 |
+| Q4 异常流转 | throw → Filter → JSON | ⚠️ 知道 Filter，JSON 细节不完整 |
+| Q5 事务回滚 | $transaction 失败行为 | ✅ 答对，原因说不出 |
+| Q6 buildTree | 读代码推算输出 | ✅ 完全正确 |
+
+**薄弱点：** 概念知道但说不清细节（泛型推断、Promise.all 时间分析、JSON 完整结构）。需要多看代码建立"看到代码就能推出结果"的能力。
