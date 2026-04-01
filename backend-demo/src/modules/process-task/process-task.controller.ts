@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Inject, Query } from '@nestjs/common';
 
 import { ok } from '../../common/dto/api-response';
 import { ProcessTaskService } from './process-task.service';
@@ -6,7 +6,10 @@ import { ProcessTaskService } from './process-task.service';
 @Controller('tasks')
 export class ProcessTaskController {
   // 任务模块的 HTTP 入口。
-  constructor(private readonly processTaskService: ProcessTaskService) {}
+  constructor(
+    @Inject(ProcessTaskService)
+    private readonly processTaskService: ProcessTaskService,
+  ) {}
 
   @Get()
   async getList(

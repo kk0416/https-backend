@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Prisma, TaskStatus } from '@prisma/client';
 
 import { toApiEnum, toPositiveInt, toPrismaEnum } from '../../common/utils/api-format';
@@ -14,8 +14,10 @@ type GetTaskListQuery = {
 
 @Injectable()
 export class ProcessTaskService {
-  // 任务列表的数据库查询都放在这里。
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService)
+    private readonly prisma: PrismaService,
+  ) {}
 
   async getList(query: GetTaskListQuery) {
     // 和数据列表一样，先处理分页参数。

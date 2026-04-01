@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Inject, Param, Post, Query, Req } from '@nestjs/common';
 
 import { ok } from '../../common/dto/api-response';
 import { DataAssetService } from './data-asset.service';
@@ -6,7 +6,16 @@ import { DataAssetService } from './data-asset.service';
 @Controller('data-assets')
 export class DataAssetController {
   // Qt/C++ 开发者可以把 Controller 理解成“HTTP 入口层”。
-  constructor(private readonly dataAssetService: DataAssetService) {}
+  constructor(
+    @Inject(DataAssetService)
+    private readonly dataAssetService: DataAssetService,
+  ) {}
+
+  @Get('upload-options')
+  async getUploadOptions() {
+    const data = await this.dataAssetService.getUploadOptions();
+    return ok(data);
+  }
 
   @Get()
   async getList(
@@ -41,7 +50,7 @@ export class DataAssetController {
     return ok(data);
   }
 
-  @Get('graph')
+  @Get('graph') 
   async getGraph(
     @Query('siteId') siteId?: string,
     @Query('sceneId') sceneId?: string,
@@ -57,6 +66,33 @@ export class DataAssetController {
     // Param 用来读取路径参数中的 id。
     // 例如：POST /api/v1/data-assets/1/generate-point-cloud
     const data = await this.dataAssetService.generatePointCloud(id);
+    return ok(data);
+  }
+
+  @Post('upload-raw')
+  async uploadRawData(@Req() request: any) {
+    if (!request.file) {
+      throw new BadRequestException('multipart parser is not enabled');
+    }
+
+    const uploadedFile = await request.file();
+
+    if (!uploadedFile) {
+      throw new BadRequestException('file is required');
+    }
+
+    const fields = uploadedFile.fields as Record<
+      string,
+      { value?: string } | undefined
+    >;
+
+    const data = await this.dataAssetService.uploadRawData({
+      siteId: String(fields['siteId']?.value ?? ''),
+      sceneId: String(fields['sceneId']?.value ?? ''),
+      dataName: String(fields['dataName']?.value ?? ''),
+      file: uploadedFile,
+    });
+
     return ok(data);
   }
 }

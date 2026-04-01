@@ -1,11 +1,14 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Inject, Query } from '@nestjs/common';
 
 import { ok } from '../../common/dto/api-response';
 import { DashboardService } from './dashboard.service';
 
 @Controller('dashboard') //设置路由前缀为 '/dashboard'
 export class DashboardController {
-  constructor(private readonly dashboardService: DashboardService) {}
+  constructor(
+    @Inject(DashboardService)
+    private readonly dashboardService: DashboardService,
+  ) {}
 
   @Get('data-summary')
   async getDataSummary(// Query 装饰器会把 URL 查询参数自动传进来。
@@ -26,7 +29,10 @@ export class DashboardAliasController {
   // 原始标准路由仍然保留在 /api/v1/dashboard/data-summary。
   // 这样做的原因是联调阶段前端更容易把“总览统计”理解成顶层接口，
   // 给一个别名可以减少不必要的 404 试错。
-  constructor(private readonly dashboardService: DashboardService) {}
+  constructor(
+    @Inject(DashboardService)
+    private readonly dashboardService: DashboardService,
+  ) {}
 
   @Get('data-summary')
   async getDataSummaryAlias(

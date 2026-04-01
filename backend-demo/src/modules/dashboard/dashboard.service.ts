@@ -1,13 +1,15 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class DashboardService {
-  // PrismaService 由 NestJS 自动注入。
-  // 可以把它理解成“全局共享的数据库访问对象”。
-  constructor(private readonly prisma: PrismaService) {}
+  // PrismaService 由 NestJS 自动注入:“全局共享的数据库访问对象”。
+  constructor(
+    @Inject(PrismaService)
+    private readonly prisma: PrismaService,
+  ) {}
 
   async getDataSummary(siteId?: string, sceneId?: string) {
     // 先把页面传进来的 siteId / sceneId 翻译成数据库 where 条件。

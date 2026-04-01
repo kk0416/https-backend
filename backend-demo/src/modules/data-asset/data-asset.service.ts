@@ -1,4 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Inject, NotFoundException } from '@nestjs/common';
+import { createWriteStream } from 'node:fs';
+import { mkdir, rm } from 'node:fs/promises';
+import { basename, extname, resolve } from 'node:path';
+import { Transform } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import { createHash, randomUUID } from 'node:crypto';
 import { DataAssetStatus, DataType, Prisma } from '@prisma/client';
 
 import { toApiEnum, toPositiveInt, toPrismaEnum } from '../../common/utils/api-format';
@@ -23,11 +29,53 @@ type TreeNode = {
   children: TreeNode[];
 };
 
+type RawUploadInput = {
+  siteId: string;
+  sceneId: string;
+  dataName?: string;
+  file: {
+    filename?: string;
+    mimetype?: string;
+    file: NodeJS.ReadableStream;
+  };
+};
+
 @Injectable()
 export class DataAssetService {
   // Service 层负责真正的数据库访问和业务处理。
   // Controller 不直接写 SQL/Prisma 查询，而是调用这里的方法。
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService)
+    private readonly prisma: PrismaService,
+  ) {}
+
+  async getUploadOptions() {
+    const sites = await this.prisma.site.findMany({
+      orderBy: {
+        id: 'asc',
+      },
+      include: {
+        scenes: {
+          orderBy: {
+            id: 'asc',
+          },
+        },
+      },
+    });
+
+    return {
+      sites: sites.map((site) => ({
+        id: site.id,
+        siteCode: site.siteCode,
+        siteName: site.siteName,
+        scenes: site.scenes.map((scene) => ({
+          id: scene.id,
+          sceneCode: scene.sceneCode,
+          sceneName: scene.sceneName,
+        })),
+      })),
+    };
+  }
 
   async getList(query: GetDataAssetListQuery) {
     // URL 查询参数天然都是字符串，所以先做一次安全转换。
@@ -230,6 +278,127 @@ export class DataAssetService {
     return result;
   }
 
+  async uploadRawData(input: RawUploadInput) {
+    const siteId = Number.parseInt(input.siteId, 10);
+    const sceneId = Number.parseInt(input.sceneId, 10);
+
+    if (Number.isNaN(siteId)) {
+      throw new BadRequestException('invalid site id');
+    }
+
+    if (Number.isNaN(sceneId)) {
+      throw new BadRequestException('invalid scene id');
+    }
+
+    const originalFileName = this.sanitizeFileName(input.file.filename ?? '');
+    if (!originalFileName) {
+      throw new BadRequestException('file name is required');
+    }
+
+    const [site, scene] = await Promise.all([
+      this.prisma.site.findUnique({
+        where: { id: siteId },
+      }),
+      this.prisma.scene.findUnique({
+        where: { id: sceneId },
+      }),
+    ]);
+
+    if (!site) {
+      throw new NotFoundException('site not found');
+    }
+
+    if (!scene) {
+      throw new NotFoundException('scene not found');
+    }
+
+    if (scene.siteId !== site.id) {
+      throw new BadRequestException('scene does not belong to the selected site');
+    }
+
+    const normalizedDataName = input.dataName?.trim() || basename(originalFileName, extname(originalFileName));
+    if (!normalizedDataName) {
+      throw new BadRequestException('data name is required');
+    }
+
+    const storage = await this.storeUploadedFile(site.id, scene.id, originalFileName, input.file.file);
+    const operatorId = 'manual-upload';
+    const operatorName = '前端上传';
+    const now = new Date();
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const asset = await tx.dataAsset.create({
+          data: {
+            siteId: site.id,
+            sceneId: scene.id,
+            dataType: 'RAW',
+            dataName: normalizedDataName,
+            status: 'READY',
+            progress: 100,
+            storagePath: storage.storagePath,
+            fileName: originalFileName,
+            fileSize: storage.fileSize,
+            fileHash: storage.fileHash,
+            operatorId,
+            operatorName,
+          },
+        });
+
+        const task = await tx.processTask.create({
+          data: {
+            siteId: site.id,
+            sceneId: scene.id,
+            taskType: 'UPLOAD_RAW',
+            taskTitle: `${normalizedDataName} 上传任务`,
+            sourceDataId: asset.id,
+            targetDataId: asset.id,
+            status: 'SUCCESS',
+            progress: 100,
+            operatorId,
+            operatorName,
+            startedAt: now,
+            finishedAt: now,
+          },
+        });
+
+        const updatedAsset = await tx.dataAsset.update({
+          where: { id: asset.id },
+          data: {
+            currentTaskId: task.id,
+          },
+        });
+
+        await tx.operationLog.create({
+          data: {
+            siteId: site.id,
+            sceneId: scene.id,
+            dataId: asset.id,
+            taskId: task.id,
+            operationType: 'UPLOAD_RAW',
+            operationDesc: `上传原始数据 ${normalizedDataName}`,
+            status: 'SUCCESS',
+            operatorId,
+            operatorName,
+          },
+        });
+
+        return {
+          assetId: updatedAsset.id,
+          taskId: task.id,
+          dataName: updatedAsset.dataName,
+          fileName: originalFileName,
+          fileSize: storage.fileSize,
+          storagePath: updatedAsset.storagePath,
+          status: toApiEnum(updatedAsset.status),
+        };
+      });
+    } catch (error) {
+      await rm(storage.absolutePath, { force: true });
+      throw error;
+    }
+  }
+
   // buildWhere 负责把 URL 查询参数翻译成 Prisma where 条件。
   private buildWhere(
     siteId?: string,
@@ -301,5 +470,50 @@ export class DataAssetService {
     }
 
     return roots;
+  }
+
+  private sanitizeFileName(fileName: string) {
+    return fileName
+      .trim()
+      .replace(/[<>:"/\\|?*\u0000-\u001F]/g, '_');
+  }
+
+  private async storeUploadedFile(
+    siteId: number,
+    sceneId: number,
+    originalFileName: string,
+    fileStream: NodeJS.ReadableStream,
+  ) {
+    const extension = extname(originalFileName) || '.bin';
+    const storedFileName = `${Date.now()}-${randomUUID()}${extension}`;
+    const relativeDirectory = `data/uploads/raw/${siteId}/${sceneId}`;
+    const absoluteDirectory = resolve(process.cwd(), relativeDirectory);
+    const absolutePath = resolve(absoluteDirectory, storedFileName);
+    const storagePath = `${relativeDirectory}/${storedFileName}`.replace(/\\/g, '/');
+    const hash = createHash('sha256');
+    let fileSize = 0;
+
+    await mkdir(absoluteDirectory, { recursive: true });
+
+    const meter = new Transform({
+      transform(
+        chunk: Buffer,
+        _encoding: BufferEncoding,
+        callback: (error?: Error | null, data?: Buffer) => void,
+      ) {
+        fileSize += chunk.length;
+        hash.update(chunk);
+        callback(null, chunk);
+      },
+    });
+
+    await pipeline(fileStream, meter, createWriteStream(absolutePath));
+
+    return {
+      absolutePath,
+      storagePath,
+      fileSize,
+      fileHash: hash.digest('hex'),
+    };
   }
 }
