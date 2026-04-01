@@ -85,7 +85,7 @@ export class DataAssetController {
       string,
       { value?: string } | undefined
     >;
-
+    console.log('Received file upload with fields:', fields);
     const data = await this.dataAssetService.uploadRawData({
       siteId: String(fields['siteId']?.value ?? ''),
       sceneId: String(fields['sceneId']?.value ?? ''),

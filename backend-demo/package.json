@@ -7,9 +7,12 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
     "start:dev": "tsx watch src/main.ts",
-    "db:seed": "tsx scripts/seed.ts"
+    "db:seed": "tsx scripts/seed.ts",
+    "client:dev": "npm --prefix client run dev",
+    "client:build": "npm --prefix client run build"
   },
   "dependencies": {
+    "@fastify/multipart": "^9.4.0",
     "@nestjs/common": "^11.1.17",
     "@nestjs/core": "^11.1.17",
     "@nestjs/platform-fastify": "^11.1.17",

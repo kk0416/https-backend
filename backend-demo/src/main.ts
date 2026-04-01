@@ -7,6 +7,7 @@ import { resolve } from 'node:path';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
+import multipart from '@fastify/multipart';
 
 import { AppModule } from './app.module';
 import { ok } from './common/dto/api-response';
@@ -20,6 +21,15 @@ function resolveRuntimeFile(filePath: string | undefined) {
  // 把相对路径转换成项目根目录下的绝对路径
   const absolutePath = resolve(process.cwd(), filePath);
   return existsSync(absolutePath) ? absolutePath : undefined;
+}
+
+function readOptionalRuntimeTextFile(filePath: string) {
+  const absolutePath = resolve(process.cwd(), filePath);
+  if (!existsSync(absolutePath)) {
+    return undefined;
+  }
+
+  return readFileSync(absolutePath, 'utf8');
 }
 // 证书: 优先 crt + key，然后 pfx
 function createHttpsOptions(logger: Logger) {
@@ -81,6 +91,12 @@ async function bootstrap() {
 
   // 裸路径 `/health`，直接通过 fastify 定义，不经过 Nest 的全局前缀和全局过滤器。
   const fastify = app.getHttpAdapter().getInstance();
+  await fastify.register(multipart as any, {
+    limits: {
+      files: 1,
+    },
+  });
+
   fastify.get('/health', async () =>
     ok({
       service: 'gaussian-backend-demo',
@@ -88,12 +104,47 @@ async function bootstrap() {
     }),
   );
 
+  fastify.get('/tester', async (_request, reply) => {
+    const testerHtml = readOptionalRuntimeTextFile('src/test-client/index.html');
+
+    if (!testerHtml) {
+      logger.warn('测试页面资源缺失: src/test-client/index.html');
+      return reply.status(404).send({
+        code: 404,
+        message: 'tester page not found',
+        data: {
+          path: '/tester',
+        },
+      });
+    }
+
+    return reply.type('text/html; charset=utf-8').send(testerHtml);
+  });
+
+  fastify.get('/tester/', async (_request, reply) => {
+    const testerHtml = readOptionalRuntimeTextFile('src/test-client/index.html');
+
+    if (!testerHtml) {
+      logger.warn('测试页面资源缺失: src/test-client/index.html');
+      return reply.status(404).send({
+        code: 404,
+        message: 'tester page not found',
+        data: {
+          path: '/tester',
+        },
+      });
+    }
+
+    return reply.type('text/html; charset=utf-8').send(testerHtml);
+  });
+
   await app.listen(httpsPort, host);
 
   const displayHost = host === '0.0.0.0' ? '127.0.0.1' : host;
   logger.log(`运行地址: https://${displayHost}:${httpsPort}`);
   logger.log(`业务健康检查: https://${displayHost}:${httpsPort}/api/v1/health`);
   logger.log(`探针兼容健康检查: https://${displayHost}:${httpsPort}/health`);
+  logger.log(`接口测试页面: https://${displayHost}:${httpsPort}/tester`);
   logger.log(`当前 HTTPS 启动模式: ${mode}`);
   logger.log(`cwd = ${process.cwd()}`);
   logger.log(`__dirname = ${__dirname}`);

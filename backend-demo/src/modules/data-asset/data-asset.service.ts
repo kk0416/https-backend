@@ -4,7 +4,7 @@ import { mkdir, rm } from 'node:fs/promises';
 import { basename, extname, resolve } from 'node:path';
 import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { DataAssetStatus, DataType, Prisma } from '@prisma/client';
 
 import { toApiEnum, toPositiveInt, toPrismaEnum } from '../../common/utils/api-format';
@@ -390,6 +390,7 @@ export class DataAssetService {
           fileName: originalFileName,
           fileSize: storage.fileSize,
           storagePath: updatedAsset.storagePath,
+          absolutePath: storage.absolutePath,
           status: toApiEnum(updatedAsset.status),
         };
       });
@@ -484,12 +485,10 @@ export class DataAssetService {
     originalFileName: string,
     fileStream: NodeJS.ReadableStream,
   ) {
-    const extension = extname(originalFileName) || '.bin';
-    const storedFileName = `${Date.now()}-${randomUUID()}${extension}`;
     const relativeDirectory = `data/uploads/raw/${siteId}/${sceneId}`;
     const absoluteDirectory = resolve(process.cwd(), relativeDirectory);
-    const absolutePath = resolve(absoluteDirectory, storedFileName);
-    const storagePath = `${relativeDirectory}/${storedFileName}`.replace(/\\/g, '/');
+    const absolutePath = resolve(absoluteDirectory, originalFileName);
+    const storagePath = `${relativeDirectory}/${originalFileName}`.replace(/\\/g, '/');
     const hash = createHash('sha256');
     let fileSize = 0;
 
@@ -507,7 +506,19 @@ export class DataAssetService {
       },
     });
 
-    await pipeline(fileStream, meter, createWriteStream(absolutePath));
+    try {
+      // 上传文件落盘后保持原始文件名；同名文件直接报错，避免静默覆盖。
+      await pipeline(fileStream, meter, createWriteStream(absolutePath, { flags: 'wx' }));
+    } catch (error) {
+      const streamError = error as NodeJS.ErrnoException;
+
+      if (streamError.code === 'EEXIST') {
+        throw new BadRequestException('file already exists in target directory');
+      }
+
+      await rm(absolutePath, { force: true });
+      throw error;
+    }
 
     return {
       absolutePath,
