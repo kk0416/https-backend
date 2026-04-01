@@ -12,3 +12,6 @@ backend-demo/privkey.pem
 .idea/gaussian.iml
 .idea/modules.xml
 .idea/vcs.xml
+backend-demo/data
+backend-demo/data/roboshop.db
+backend-demo/docs/*.log
