@@ -1,0 +1,11 @@
+node_modules
+dist
+docs
+.vscode
+.git
+.env
+*.log
+docs/*.log
+docs/*.pid
+certs/*.crt
+certs/*.key

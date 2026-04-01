@@ -29,6 +29,8 @@
 11. 关键接口已经完成本地实测。
 12. 已具备 Docker 运行文件：`Dockerfile`、`docker-compose.yml`、`entrypoint.sh`
 13. Docker 容器内已实测通过 `HTTPS + Prisma migrate + health` 启动链路。
+14. 已内置浏览器测试页，可直接在后端同源地址下调试接口。
+15. 已新增独立前端客户端，使用 `Vue 3 + Element Plus + ECharts` 测试后端接口。
 
 ## 常用命令
 
@@ -38,6 +40,14 @@ npm run start:dev
 
 ```bash
 npm run db:seed
+```
+
+```bash
+npm run client:dev
+```
+
+```bash
+npm run client:build
 ```
 
 ## 使用说明
@@ -60,6 +70,20 @@ npm run db:seed
 16. 生产命名空间已收口为 `roboshop`
 17. 生产 StorageClass 已收口为 `csi-disk-topology`
 18. Docker / 华为云目标内部端口建议统一为 `8443`
+19. 启动后可访问 `https://127.0.0.1:<端口>/tester` 打开接口测试页面
+20. 独立客户端位于 `client/` 目录，开发时默认通过 Vite 代理转发到 `https://127.0.0.1:34430`
+21. 如后端端口不是 `34430`，可复制 `client/.env.example` 为 `client/.env.local` 并修改 `VITE_PROXY_TARGET`
+22. 独立客户端包含 3 个页面：
+    `概览总览`：健康检查和统计摘要
+    `数据管理`：数据资产、任务列表、生成点云
+    `运行可视化`：树视图和关系图视图
+23. 独立客户端支持 3 种数据源模式：
+    `proxy`：通过 Vite 代理访问本地后端
+    `direct`：直接请求指定后端 Base URL
+    `mock`：使用内置模拟数据，不依赖后端服务
+24. `mock` 模式下可直接演示表格、统计和关系图；点击“生成点云”会在前端内存里新增模拟任务和目标资产
+25. `数据管理` 页面已支持“上传原始数据”流程：先弹系统文件选择框，再选择现场/场景并编辑数据名称，最后以 `multipart/form-data` 提交到后端
+26. 客户端默认 `siteId/sceneId` 现已允许留空；留空时表示不过滤，避免把测试页面绑定到固定数据库主键
 
 ## 当前接口
 
@@ -67,7 +91,10 @@ npm run db:seed
 2. `GET /health`
 3. `GET /api/v1/dashboard/data-summary`
 4. `GET /api/v1/data-assets`
-5. `GET /api/v1/data-assets/tree`
-6. `GET /api/v1/data-assets/graph`
-7. `GET /api/v1/tasks`
-8. `POST /api/v1/data-assets/:id/generate-point-cloud`
+5. `GET /api/v1/data-assets/upload-options`
+6. `POST /api/v1/data-assets/upload-raw`
+7. `GET /api/v1/data-assets/tree`
+8. `GET /api/v1/data-assets/graph`
+9. `GET /api/v1/tasks`
+10. `POST /api/v1/data-assets/:id/generate-point-cloud`
+11. `GET /tester`
